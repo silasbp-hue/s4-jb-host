@@ -1,0 +1,59 @@
+# Add to configuration.yaml:
+#   rest_command: !include ps4_jb_rest.yaml
+#   (or paste blocks under the matching top-level keys)
+
+rest_command:
+  ps4_jb_inject:
+    url: "http://127.0.0.1:8080/api/inject?file={{ file }}"
+    method: get
+    timeout: 15
+  ps4_jb_push:
+    url: "http://127.0.0.1:8080/api/inject"
+    method: post
+    payload: "{{ payload }}"
+    content_type: "application/octet-stream"
+    timeout: 15
+
+sensor:
+  - platform: rest
+    name: ps4_jb_state
+    resource: "http://127.0.0.1:8080/api/status"
+    value_template: >-
+      {{ 'jailbroken' if value_json.jailbroken else 'offline' }}
+    json_attributes:
+      - binloader
+      - ftp
+      - klog
+      - last_inject
+      - injected
+    scan_interval: 20
+
+template:
+  - binary_sensor:
+      - name: "PS4 jailbroken"
+        state: "{{ states('sensor.ps4_jb_state') == 'jailbroken' }}"
+        device_class: connectivity
+
+automation:
+  - alias: "PS4 JB — announce when console comes up"
+    id: ps4_jb_online
+    triggers:
+      - trigger: state
+        entity_id: binary_sensor.ps4_jailbroken
+        to: "on"
+    actions:
+      - action: persistent_notification.create
+        data:
+          title: "PS4 online"
+          message: "GoldHEN detected. Payloads in /share/ps4jb/auto were pushed."
+  - alias: "PS4 JB — warn when console drops"
+    id: ps4_jb_offline
+    triggers:
+      - trigger: state
+        entity_id: binary_sensor.ps4_jailbroken
+        to: "off"
+        for: "00:02:00"
+    actions:
+      - action: notify.notify
+        data:
+          message: "PS4 offline — cold boot needs the browser chain again."

@@ -1,0 +1,61 @@
+name: PS4 Jailbreak Host
+version: "1.0.0"
+slug: ps4_jb_host
+description: Self-hosted WebKitty exploit host + GoldHEN payload injector (PS4 FW 14.00)
+url: https://github.com/ArabPixel/WebKitty
+arch:
+  - aarch64
+  - amd64
+  - armv7
+  - armhf
+  - i386
+startup: application
+boot: auto
+host_network: true
+homeassistant_api: true
+map:
+  - share:rw
+options:
+  ps4_host: "192.168.3.69"
+  host_ip: ""
+  http_port: 8080
+  landing_path: "/"
+  dns_enabled: false
+  dns_port: 53
+  dns_upstream: "1.1.1.1"
+  intercept_domains:
+    - manuals.playstation.net
+  block_domains:
+    - ps4.update.playstation.net
+    - update.playstation.net
+    - post.net.playstation.net
+  auto_inject: true
+  inject_once: true
+  payload_dir: "/share/ps4jb/auto"
+  goldhen_dir: "/share/ps4jb/payloads"
+  goldhen_auto_update: true
+  goldhen_check_interval: 3600
+  github_token: ""
+  poll_interval: 15
+  entity_prefix: ps4_jb
+schema:
+  ps4_host: str
+  host_ip: str
+  http_port: port
+  landing_path: str
+  dns_enabled: bool
+  dns_port: port
+  dns_upstream: str
+  intercept_domains:
+    - str
+  block_domains:
+    - str
+  auto_inject: bool
+  inject_once: bool
+  payload_dir: str
+  goldhen_dir: str
+  goldhen_auto_update: bool
+  goldhen_check_interval: int(600,86400)
+  github_token: password
+  poll_interval: int(5,3600)
+  entity_prefix: str
