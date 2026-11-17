@@ -57,5 +57,8 @@ schema:
   goldhen_auto_update: bool
   goldhen_check_interval: int(600,86400)
   github_token: password
+  github_repo: str
+  github_branch: str
+  github_auto_push: bool
   poll_interval: int(5,3600)
   entity_prefix: str

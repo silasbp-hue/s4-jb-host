@@ -80,6 +80,9 @@ def load_options():
         "goldhen_auto_update": True,
         "goldhen_check_interval": 3600,
         "github_token": "",
+        "github_repo": "silasbp-hue/s4-jb-host",
+        "github_branch": "main",
+        "github_auto_push": True,
         "poll_interval": 15,
         "entity_prefix": "ps4_jb",
     }
@@ -133,7 +136,47 @@ def sync_webkitty(force=False):
         return (WEBKITTY_DIR / "index.html").exists()
 
 
-def _pin_webkitty_goldhen():
+def github_push_latest(manifest, token):
+    """Publish the current app.py + config.yaml + README to GitHub via the
+    Contents API, one commit per file. Runs only when github_auto_push is on."""
+    repo = manifest.get("github_repo") if isinstance(manifest, dict) else None
+    if not repo or not token:
+        return
+    branch = manifest.get("github_branch", "main")
+    base = f"https://api.github.com/repos/{repo}/contents"
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json",
+        "User-Agent": "ps4-jb-host",
+    }
+    for rel in ("app/ps4jb.py", "config.yaml", "README.md"):
+        p = Path("/app") / rel if Path("/app").exists() else None
+        # Prefer the live source tree if present
+        src = Path(rel)
+        if not src.exists():
+            src = Path("/app") / rel
+        if not src.exists():
+            continue
+        import base64
+        content = base64.b64encode(src.read_bytes()).decode()
+        # Get existing sha to overwrite
+        sha = None
+        try:
+            r = urllib.request.urlopen(urllib.request.Request(
+                f"{base}/{rel}?ref={branch}", headers={"Authorization": f"Bearer {token}", "User-Agent": "ps4-jb-host"}))
+            sha = json.loads(r.read()).get("sha")
+        except (urllib.error.HTTPError, urllib.error.URLError):
+            pass
+        body = {"message": f"auto: sync after GoldHEN {manifest.get('version','')}",
+                "content": content, "branch": branch}
+        if sha:
+            body["sha"] = sha
+        req = urllib.request.Request(f"{base}/{rel}", data=json.dumps(body).encode(), headers=headers, method="PUT")
+        try:
+            urllib.request.urlopen(req, timeout=60).read()
+            log(f"github push {rel} ok")
+        except (urllib.error.HTTPError, urllib.error.URLError) as exc:
+            log(f"github push {rel} failed: {exc}")
     """Rewrite HENs.js so WebKitty only offers the newest GoldHEN, and copy
     the freshly downloaded payload over the bundled one."""
     manifest = read_goldhen_manifest()
@@ -240,6 +283,18 @@ def sync_goldhen(opts, force=False):
     dest_dir = Path(opts["goldhen_dir"])
     dest_dir.mkdir(parents=True, exist_ok=True)
     token = opts.get("github_token") or ""
+    # Fallback: token file (for setups where the Supervisor options dialog is
+    # unreachable or protection mode blocks the API)
+    if not token:
+        for p in (Path("/data/.token"), Path("/app/.token"), Path("/addons/ps4_jb_host/.token"), Path("/config/.token"), Path("/share/ps4jb/.token")):
+            try:
+                token = p.read_text().strip()
+                if token:
+                    break
+            except OSError:
+                pass
+    if token:
+        opts["github_token"] = token
     manifest = read_goldhen_manifest()
 
     try:
@@ -285,6 +340,18 @@ def sync_goldhen(opts, force=False):
     dest_dir = Path(opts["goldhen_dir"])
     dest_dir.mkdir(parents=True, exist_ok=True)
     token = opts.get("github_token") or ""
+    # Fallback: token file (for setups where the Supervisor options dialog is
+    # unreachable or protection mode blocks the API)
+    if not token:
+        for p in (Path("/data/.token"), Path("/app/.token"), Path("/addons/ps4_jb_host/.token"), Path("/config/.token"), Path("/share/ps4jb/.token")):
+            try:
+                token = p.read_text().strip()
+                if token:
+                    break
+            except OSError:
+                pass
+    if token:
+        opts["github_token"] = token
     manifest = read_goldhen_manifest()
 
     try:
@@ -328,6 +395,9 @@ def sync_goldhen(opts, force=False):
     # Re-pin WebKitty to the new version if it's already unpacked
     if (WEBKITTY_DIR / "index.html").exists():
         _pin_webkitty_goldhen()
+    # Publish to GitHub if configured
+    if opts.get("github_auto_push") and opts.get("github_token"):
+        github_push_latest(manifest, opts["github_token"])
     return manifest
 
 
