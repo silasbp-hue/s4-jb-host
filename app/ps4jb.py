@@ -20,6 +20,7 @@ import threading
 import time
 import urllib.error
 import urllib.request
+from datetime import datetime, timedelta
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
@@ -78,7 +79,9 @@ def load_options():
         "payload_dir": "/share/ps4jb/auto",
         "goldhen_dir": "/share/ps4jb/payloads",
         "goldhen_auto_update": True,
-        "goldhen_check_interval": 3600,
+        "goldhen_check_interval": 3600,  # legacy fallback, unused when hour is set
+        "goldhen_check_hour": 4,
+        "goldhen_check_minute": 0,
         "github_token": "",
         "github_repo": "silasbp-hue/s4-jb-host",
         "github_branch": "main",
@@ -346,12 +349,31 @@ def sync_goldhen(opts, force=False):
     return manifest
 
 
+def _next_check_delay(hour, minute):
+    """Seconds until the next local HH:MM. Uses the Pi's own timezone
+    (America/Sao_Paulo on both hosts), so 04:00 means 04:00 local time."""
+    now = datetime.now().astimezone()
+    nxt = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+    if nxt <= now:
+        nxt += timedelta(days=1)
+    return max(1.0, (nxt - now).total_seconds())
+
+
 def goldhen_loop(opts):
-    interval = max(600, int(opts.get("goldhen_check_interval") or 3600))
+    """One check per day at 04:00 local. On a fresh install (no manifest yet)
+    bootstrap immediately so the payload exists before the first 04:00."""
+    hour = int(opts.get("goldhen_check_hour", 4))
+    minute = int(opts.get("goldhen_check_minute", 0))
     while True:
+        if not read_goldhen_manifest().get("version"):
+            log("no GoldHEN manifest — bootstrap check now")
+            sync_goldhen(opts)
+        delay = _next_check_delay(hour, minute)
+        nxt = datetime.now().astimezone() + timedelta(seconds=delay)
+        log(f"next GoldHEN check: {nxt.strftime('%Y-%m-%d %H:%M %Z')} (in {int(delay)}s)")
+        time.sleep(delay)
         if opts.get("goldhen_auto_update", True):
             sync_goldhen(opts)
-        time.sleep(interval)
 
 
 # ------------------------------------------------------- console probing
