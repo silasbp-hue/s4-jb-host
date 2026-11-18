@@ -336,63 +336,6 @@ def sync_goldhen(opts, force=False):
     GOLDHEN_JSON.write_text(json.dumps(manifest, indent=2))
     with state_lock:
         state["goldhen"] = manifest
-def sync_goldhen(opts, force=False):
-    """Fetch the newest GoldHEN payload. Never destructive: a failed check keeps
-    the last good file and the old manifest."""
-    dest_dir = Path(opts["goldhen_dir"])
-    dest_dir.mkdir(parents=True, exist_ok=True)
-    token = opts.get("github_token") or ""
-    # Fallback: token file (for setups where the Supervisor options dialog is
-    # unreachable or protection mode blocks the API)
-    if not token:
-        for p in (Path("/data/.token"), Path("/app/.token"), Path("/addons/ps4_jb_host/.token"), Path("/config/.token"), Path("/share/ps4jb/.token")):
-            try:
-                token = p.read_text().strip()
-                if token:
-                    break
-            except OSError:
-                pass
-    if token:
-        opts["github_token"] = token
-    manifest = read_goldhen_manifest()
-
-    try:
-        remote = goldhen_remote(token)
-    except urllib.error.HTTPError as exc:
-        log(f"goldhen check: github {exc.code} (rate limit? add github_token)")
-        return manifest
-    except (urllib.error.URLError, OSError, ValueError) as exc:
-        log(f"goldhen check failed: {exc}")
-        return manifest
-    if not remote:
-        log("goldhen check: no matching asset")
-        return manifest
-
-    have = manifest.get("version")
-    if have == remote["version"] and not force:
-        return manifest
-
-    target = dest_dir / remote["name"]
-    stable = dest_dir / "goldhen.bin"
-    try:
-        size, sha = _download(remote["url"], target, token)
-    except (urllib.error.URLError, OSError) as exc:
-        log(f"goldhen download failed: {exc}")
-        return manifest
-
-    shutil.copyfile(target, stable)
-    manifest = {
-        "version": remote["version"],
-        "file": remote["name"],
-        "path": str(stable),
-        "size": size,
-        "sha256": sha,
-        "source": remote["url"],
-        "fetched_at": time.time(),
-    }
-    GOLDHEN_JSON.write_text(json.dumps(manifest, indent=2))
-    with state_lock:
-        state["goldhen"] = manifest
     log(f"goldhen {remote['version']} → {stable} ({size} B, sha256 {sha[:12]}…)")
     # Re-pin WebKitty to the new version if it's already unpacked
     if (WEBKITTY_DIR / "index.html").exists():
