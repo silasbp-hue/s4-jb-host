@@ -35,6 +35,8 @@ options:
   goldhen_dir: "/share/ps4jb/payloads"
   goldhen_auto_update: true
   goldhen_check_interval: 3600
+  goldhen_check_hour: 4
+  goldhen_check_minute: 0
   github_token: ""
   poll_interval: 15
   entity_prefix: ps4_jb
@@ -56,6 +58,8 @@ schema:
   goldhen_dir: str
   goldhen_auto_update: bool
   goldhen_check_interval: int(600,86400)
+  goldhen_check_hour: int(0,23)
+  goldhen_check_minute: int(0,59)
   github_token: password
   github_repo: str
   github_branch: str
