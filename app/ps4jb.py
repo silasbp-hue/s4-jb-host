@@ -136,13 +136,14 @@ def sync_webkitty(force=False):
         return (WEBKITTY_DIR / "index.html").exists()
 
 
-def github_push_latest(manifest, token):
+def github_push_latest(opts, version=""):
     """Publish the current app.py + config.yaml + README to GitHub via the
     Contents API, one commit per file. Runs only when github_auto_push is on."""
-    repo = manifest.get("github_repo") if isinstance(manifest, dict) else None
+    token = opts.get("github_token", "")
+    repo = opts.get("github_repo")
     if not repo or not token:
         return
-    branch = manifest.get("github_branch", "main")
+    branch = opts.get("github_branch", "main")
     base = f"https://api.github.com/repos/{repo}/contents"
     headers = {
         "Authorization": f"Bearer {token}",
@@ -150,11 +151,11 @@ def github_push_latest(manifest, token):
         "User-Agent": "ps4-jb-host",
     }
     for rel in ("app/ps4jb.py", "config.yaml", "README.md"):
-        p = Path("/app") / rel if Path("/app").exists() else None
-        # Prefer the live source tree if present
-        src = Path(rel)
+        # GitHub keeps app/ps4jb.py, but the container holds a flat /app tree.
+        local_name = Path(rel).name
+        src = Path("/app") / local_name
         if not src.exists():
-            src = Path("/app") / rel
+            src = Path(local_name)
         if not src.exists():
             continue
         import base64
@@ -167,7 +168,7 @@ def github_push_latest(manifest, token):
             sha = json.loads(r.read()).get("sha")
         except (urllib.error.HTTPError, urllib.error.URLError):
             pass
-        body = {"message": f"auto: sync after GoldHEN {manifest.get('version','')}",
+        body = {"message": f"auto: sync after GoldHEN {version}",
                 "content": content, "branch": branch}
         if sha:
             body["sha"] = sha
@@ -177,6 +178,7 @@ def github_push_latest(manifest, token):
             log(f"github push {rel} ok")
         except (urllib.error.HTTPError, urllib.error.URLError) as exc:
             log(f"github push {rel} failed: {exc}")
+def _pin_webkitty_goldhen():
     """Rewrite HENs.js so WebKitty only offers the newest GoldHEN, and copy
     the freshly downloaded payload over the bundled one."""
     manifest = read_goldhen_manifest()
@@ -397,7 +399,7 @@ def sync_goldhen(opts, force=False):
         _pin_webkitty_goldhen()
     # Publish to GitHub if configured
     if opts.get("github_auto_push") and opts.get("github_token"):
-        github_push_latest(manifest, opts["github_token"])
+        github_push_latest(opts, manifest.get("version", ""))
     return manifest
 
 
